@@ -6,136 +6,188 @@ using TMPro;
 
 public class GPSManager : MonoBehaviour
 {
+    [Header("UI Components")]
     [SerializeField] private TextMeshProUGUI latitudeText;
     [SerializeField] private TextMeshProUGUI longitudeText;
     [SerializeField] private TextMeshProUGUI altitudeText;
     [SerializeField] private TextMeshProUGUI arPositionText;
 
-    private Vector2 referenceCoordinates = new Vector2(36.154f, -95.931f);
+    [Header("Debug Settings")]
+    [SerializeField] private bool showDebugLogs = true;
+    [SerializeField] private bool simulateLocationInEditor = false;
+    [SerializeField] private Vector2 editorSimulatedLocation = new Vector2(37.7749f, -122.4194f); // Example: San Francisco
+
     private ARSession arSession;
     private ARCameraManager arCameraManager;
 
     private void Awake()
     {
-        Debug.Log("[GPSManager] Initializing...");
-        
-        #if PLATFORM_ANDROID
-        if (!Permission.HasUserAuthorizedPermission(Permission.Camera))
+        DebugLog("[GPSManager] Initializing...");
+
+        if (latitudeText == null || longitudeText == null || altitudeText == null || arPositionText == null)
         {
-            Permission.RequestUserPermission(Permission.Camera);
+            DebugLog("[GPSManager] One or more TextMeshProUGUI fields are not assigned in the Inspector!", true);
+            return;
         }
-        if (!Permission.HasUserAuthorizedPermission(Permission.FineLocation))
-        {
-            Permission.RequestUserPermission(Permission.FineLocation);
-        }
-        #endif
 
         arSession = FindObjectOfType<ARSession>();
         arCameraManager = FindObjectOfType<ARCameraManager>();
 
-        if (arSession == null || arCameraManager == null)
+        if (arSession == null)
         {
-            Debug.LogError("[GPSManager] Required AR components not found!");
-            return;
+            DebugLog("[GPSManager] ARSession not found! Please add ARSession to the scene.", true);
+        }
+
+        if (arCameraManager == null)
+        {
+            DebugLog("[GPSManager] ARCameraManager not found! Please add AR Camera to the scene.", true);
+        }
+
+#if PLATFORM_ANDROID
+        RequestPermissions();
+#endif
+    }
+
+    private void RequestPermissions()
+    {
+        DebugLog("[GPSManager] Requesting permissions...");
+        if (!Permission.HasUserAuthorizedPermission(Permission.Camera))
+        {
+            Permission.RequestUserPermission(Permission.Camera);
+        }
+
+        if (!Permission.HasUserAuthorizedPermission(Permission.FineLocation))
+        {
+            Permission.RequestUserPermission(Permission.FineLocation);
         }
     }
 
     private void Start()
     {
-        Debug.Log("[GPSManager] Starting...");
-        
-        if (!IsValidCoordinate(referenceCoordinates))
-        {
-            Debug.LogError("[GPSManager] Invalid reference coordinates!");
-            return;
-        }
-
+        DebugLog("[GPSManager] Starting...");
         StartCoroutine(InitializeAR());
     }
 
     private IEnumerator InitializeAR()
     {
-        Debug.Log("[GPSManager] Waiting for AR initialization...");
-        yield return new WaitUntil(() => ARSession.state == ARSessionState.Ready);
-        
-        Debug.Log("[GPSManager] AR initialized successfully.");
+        DebugLog("[GPSManager] Initializing AR...");
+
+#if UNITY_EDITOR
+        if (simulateLocationInEditor)
+        {
+            DebugLog("[GPSManager] Simulating AR session in the Editor...");
+            yield return new WaitForSeconds(1);
+            StartCoroutine(StartLocationService());
+            yield break;
+        }
+#endif
+
+        while (ARSession.state == ARSessionState.None || ARSession.state == ARSessionState.SessionInitializing)
+        {
+            DebugLog($"[GPSManager] Waiting for ARSession to initialize. Current state: {ARSession.state}");
+            yield return null;
+        }
+
+        if (ARSession.state == ARSessionState.Unsupported)
+        {
+            DebugLog("[GPSManager] AR is not supported on this device!", true);
+            yield break;
+        }
+
+        if (ARSession.state != ARSessionState.Ready)
+        {
+            DebugLog($"[GPSManager] AR failed to initialize. Current state: {ARSession.state}", true);
+            yield break;
+        }
+
+        DebugLog("[GPSManager] AR initialized successfully.");
         StartCoroutine(StartLocationService());
     }
 
     private IEnumerator StartLocationService()
     {
+        DebugLog("[GPSManager] Starting location service...");
+
+#if PLATFORM_ANDROID
+        if (!Permission.HasUserAuthorizedPermission(Permission.FineLocation))
+        {
+            DebugLog("[GPSManager] Location permission not granted!", true);
+            yield break;
+        }
+#endif
+
         if (!Input.location.isEnabledByUser)
         {
-            Debug.LogError("[GPSManager] Location services disabled.");
+            DebugLog("[GPSManager] Location services are disabled. Please enable them in device settings.", true);
             yield break;
         }
 
-        Input.location.Start();
-        Debug.Log("[GPSManager] Initializing location services...");
+        Input.location.Start(1f, 1f);
+        DebugLog("[GPSManager] Waiting for location initialization...");
 
-        while (Input.location.status == LocationServiceStatus.Initializing)
+        int maxWait = 30;
+        while (Input.location.status == LocationServiceStatus.Initializing && maxWait > 0)
         {
+            DebugLog($"[GPSManager] Initializing location services... {maxWait}s left.");
             yield return new WaitForSeconds(1);
+            maxWait--;
         }
 
-        if (Input.location.status == LocationServiceStatus.Failed)
+        if (maxWait < 1 || Input.location.status == LocationServiceStatus.Failed)
         {
-            Debug.LogError("[GPSManager] Failed to initialize location services.");
+            DebugLog("[GPSManager] Location services failed to initialize.", true);
             yield break;
         }
 
-        Debug.Log("[GPSManager] Location services initialized. Starting updates...");
+        DebugLog("[GPSManager] Location services started successfully.");
         InvokeRepeating(nameof(UpdateLocationUI), 0, 1f);
     }
 
     private void UpdateLocationUI()
     {
+        if (simulateLocationInEditor)
+        {
+            DebugLog("[GPSManager] Simulating GPS location in Editor...");
+            latitudeText.text = $"Latitude: {editorSimulatedLocation.x:F6}";
+            longitudeText.text = $"Longitude: {editorSimulatedLocation.y:F6}";
+            altitudeText.text = $"Altitude: Simulated";
+            return;
+        }
+
         if (Input.location.status != LocationServiceStatus.Running)
         {
-            Debug.LogWarning("[GPSManager] Location services not running!");
+            DebugLog("[GPSManager] Location services are not running.", true);
             return;
         }
 
         try
         {
             var location = Input.location.lastData;
-            Vector2 currentCoordinates = new Vector2(location.latitude, location.longitude);
-            
-            if (latitudeText != null)
-                latitudeText.text = $"Latitude: {location.latitude:F6}";
-            if (longitudeText != null)
-                longitudeText.text = $"Longitude: {location.longitude:F6}";
-            if (altitudeText != null)
-                altitudeText.text = $"Altitude: {location.altitude:F1}m";
+            DebugLog($"[GPSManager] GPS Raw Data - Lat: {location.latitude}, Lon: {location.longitude}, Alt: {location.altitude}");
 
-            // Get AR Camera position for reference
-            if (arCameraManager != null && arPositionText != null)
+            latitudeText.text = $"Latitude: {location.latitude:F6}";
+            longitudeText.text = $"Longitude: {location.longitude:F6}";
+            altitudeText.text = $"Altitude: {location.altitude:F1}m";
+
+            if (arCameraManager != null)
             {
                 Vector3 arPosition = arCameraManager.transform.position;
                 arPositionText.text = $"AR Position: {arPosition:F2}";
             }
-
-            Debug.Log($"[GPSManager] Location updated - Lat: {location.latitude:F6}, Long: {location.longitude:F6}");
         }
         catch (System.Exception e)
         {
-            Debug.LogError($"[GPSManager] Error updating location UI: {e.Message}");
+            DebugLog($"[GPSManager] Error updating location: {e.Message}", true);
         }
     }
 
-    private bool IsValidCoordinate(Vector2 coord)
+    private void DebugLog(string message, bool isError = false)
     {
-        return coord.x >= -90f && coord.x <= 90f && // latitude
-               coord.y >= -180f && coord.y <= 180f;  // longitude
-    }
+        if (!showDebugLogs) return;
 
-    private void OnDestroy()
-    {
-        if (Input.location.status == LocationServiceStatus.Running)
-        {
-            CancelInvoke(nameof(UpdateLocationUI));
-            Input.location.Stop();
-        }
-        Debug.Log("[GPSManager] Cleaned up location services.");
+        if (isError)
+            Debug.LogError(message);
+        else
+            Debug.Log(message);
     }
 }
