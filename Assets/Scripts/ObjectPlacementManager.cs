@@ -3,9 +3,15 @@ using UnityEngine.UI;
 
 public class ObjectPlacementManager : MonoBehaviour
 {
-    [SerializeField] private Button drawObjectButton; // Assign your Draw button here in the Inspector
-    [SerializeField] private GameObject meshPrefab;  // Assign your model prefab here in the Inspector
-    [SerializeField] private Camera mainCamera;      // Assign your Main Camera here in the Inspector
+    [SerializeField] private Button drawObjectButton; // Assign your Draw button in the Inspector
+    [SerializeField] public GameObject firstMeshPrefab;
+    [SerializeField] public GameObject secondMeshPrefab;
+    [SerializeField] private Camera mainCamera;      // Assign your Main Camera in the Inspector
+
+    private Vector2 firstSpawnPoint;
+    private Vector2 secondSpawnPoint;
+    private bool hasFirstSpawn = false;
+    private bool hasSecondSpawn = false;
 
     private void Start()
     {
@@ -24,15 +30,15 @@ public class ObjectPlacementManager : MonoBehaviour
             mainCamera = Camera.main; // Automatically assign the Main Camera if not set
         }
 
-        if (meshPrefab == null)
+        if (firstMeshPrefab == null || secondMeshPrefab == null)
         {
-            Debug.LogError("Mesh Prefab is not assigned!");
+            Debug.LogError("One or both Mesh Prefabs are not assigned!");
         }
     }
 
     private void SpawnObjectInFrontOfCamera()
     {
-        if (meshPrefab == null || mainCamera == null)
+        if (firstMeshPrefab == null || mainCamera == null)
         {
             Debug.LogError("Cannot spawn object: Mesh Prefab or Main Camera is missing!");
             return;
@@ -43,7 +49,57 @@ public class ObjectPlacementManager : MonoBehaviour
         Quaternion spawnRotation = Quaternion.identity;
 
         // Spawn the object
-        Instantiate(meshPrefab, spawnPosition, spawnRotation);
+        Instantiate(firstMeshPrefab, spawnPosition, spawnRotation);
         Debug.Log("Spawned object in front of the camera.");
+    }
+
+    public void SetFirstSpawnPoint(Vector2 gpsCoords)
+    {
+        firstSpawnPoint = gpsCoords;
+        hasFirstSpawn = true;
+        Debug.Log($"First spawn point set at: {firstSpawnPoint.x}, {firstSpawnPoint.y}");
+    }
+
+    public void SetSecondSpawnPoint(Vector2 gpsCoords)
+    {
+        secondSpawnPoint = gpsCoords;
+        hasSecondSpawn = true;
+        Debug.Log($"Second spawn point set at: {secondSpawnPoint.x}, {secondSpawnPoint.y}");
+    }
+
+    public void SpawnObjectAtGPSLocation(Vector2 gpsCoords, GameObject prefab)
+    {
+        if (prefab == null)
+        {
+            Debug.LogError("Cannot spawn object: Prefab is missing!");
+            return;
+        }
+
+        Vector3 unityPosition = GPSEncoder.GPSToUCS(gpsCoords);
+        Instantiate(prefab, unityPosition, Quaternion.identity);
+        Debug.Log($"Spawned {prefab.name} at GPS location: {gpsCoords.x}, {gpsCoords.y}");
+    }
+
+    public void SpawnObjectsAtGPSLocations()
+    {
+        if (firstMeshPrefab == null || secondMeshPrefab == null)
+        {
+            Debug.LogError("Cannot spawn objects: One or both Mesh Prefabs are missing!");
+            return;
+        }
+
+        if (hasFirstSpawn)
+        {
+            Vector3 unityPosition1 = GPSEncoder.GPSToUCS(firstSpawnPoint);
+            Instantiate(firstMeshPrefab, unityPosition1, Quaternion.identity);
+            Debug.Log($"Spawned {firstMeshPrefab.name} at first GPS location: {firstSpawnPoint.x}, {firstSpawnPoint.y}");
+        }
+
+        if (hasSecondSpawn)
+        {
+            Vector3 unityPosition2 = GPSEncoder.GPSToUCS(secondSpawnPoint);
+            Instantiate(secondMeshPrefab, unityPosition2, Quaternion.identity);
+            Debug.Log($"Spawned {secondMeshPrefab.name} at second GPS location: {secondSpawnPoint.x}, {secondSpawnPoint.y}");
+        }
     }
 }

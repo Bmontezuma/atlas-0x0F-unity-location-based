@@ -1358,7 +1358,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   drawObjectButton: {fileID: 840760056}
-  meshPrefab: {fileID: 2291032400052495952, guid: 0a4501af9ad59d74e9c027c67e1b628a, type: 3}
+  firstMeshPrefab: {fileID: 8936236281974396556, guid: 98635d8ed0669d1468a714bdd74ccff3, type: 3}
+  secondMeshPrefab: {fileID: 461370097872935969, guid: 0471d6607c7efd543bea3446ceab7456, type: 3}
   mainCamera: {fileID: 1597614064}
 --- !u!4 &1095291549
 Transform:
@@ -2748,6 +2749,9 @@ MonoBehaviour:
   longitudeText: {fileID: 1403514730}
   altitudeText: {fileID: 1787996148}
   arStatusText: {fileID: 1105218289}
+  distanceText: {fileID: 882934098}
+  storeLocationButton: {fileID: 309472469}
+  calculateDistanceButton: {fileID: 2110157966}
   showDebugLogs: 1
   simulateLocationInEditor: 1
   editorSimulatedLocation: {x: 36.1562, y: -95.99495}
